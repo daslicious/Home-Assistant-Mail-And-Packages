@@ -81,6 +81,7 @@ from .const import (
     ATTR_ORDER,
     ATTR_PATTERN,
     ATTR_SUBJECT,
+    ATTR_TOMORROW_SUBJECT,
     ATTR_TRACKING,
     ATTR_UPS_IMAGE,
     ATTR_USPS_MAIL,
@@ -760,12 +761,15 @@ async def update_time() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
 
 
-def build_search(address: list, date: str, subject: str = "") -> tuple:
+def build_search(
+    address: list, date: str, subject: str = "", date_type: str = "SINCE"
+) -> tuple:
     """Build IMAP search query.
 
     Return tuple of utf8 flag and search query.
+    date_type: "SINCE" for emails on or after date, "SENTON" for emails on exact date.
     """
-    the_date = f"SINCE {date}"
+    the_date = f"{date_type} {date}"
     imap_search = None
     utf8_flag = False
     prefix_list = None
@@ -799,10 +803,14 @@ def build_search(address: list, date: str, subject: str = "") -> tuple:
 
 
 async def email_search(
-    account: IMAP4_SSL, address: list, date: str, subject: str = ""
+    account: IMAP4_SSL,
+    address: list,
+    date: str,
+    subject: str = "",
+    date_type: str = "SINCE",
 ) -> tuple:
     """Search emails with from, subject, and date asynchronously."""
-    utf8_flag, search = build_search(address, date, subject)
+    utf8_flag, search = build_search(address, date, subject, date_type)
 
     try:
         if utf8_flag:
@@ -1584,6 +1592,62 @@ async def get_count(  # noqa: C901
                         sensor_type,
                         amazon_mentions,
                     )
+
+    # Handle "tomorrow" subjects: emails sent yesterday with "Delivery Tomorrow"
+    # should count on the actual delivery day (today).
+    tomorrow_subjects = sensor_data.get(ATTR_TOMORROW_SUBJECT, [])
+    if tomorrow_subjects and not is_delivered_sensor:
+        yesterday = (get_today() - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+        for subject in tomorrow_subjects:
+            _LOGGER.debug(
+                "Searching for tomorrow-subject mail from (%s) with subject (%s) SENTON %s",
+                email_addresses,
+                subject,
+                yesterday,
+            )
+            (server_response, email_data) = await email_search(
+                account, email_addresses, yesterday, subject, date_type="SENTON"
+            )
+            if server_response == "OK" and email_data[0] is not None:
+                email_ids = email_data[0].split()
+                new_email_ids = []
+                for email_id in email_ids:
+                    email_id_str = (
+                        email_id.decode()
+                        if isinstance(email_id, bytes)
+                        else str(email_id)
+                    )
+                    if email_id_str not in unique_email_ids:
+                        unique_email_ids.add(email_id_str)
+                        new_email_ids.append(email_id)
+
+                if new_email_ids:
+                    if ATTR_BODY in sensor_data:
+                        body_count = sensor_data.get(ATTR_BODY_COUNT, False)
+                        new_email_data = (
+                            b" ".join(
+                                email_id.encode()
+                                if isinstance(email_id, str)
+                                else email_id
+                                for email_id in new_email_ids
+                            ),
+                        )
+                        count += await find_text(
+                            new_email_data,
+                            account,
+                            sensor_data[ATTR_BODY],
+                            body_count,
+                        )
+                    else:
+                        count += len(new_email_ids)
+
+                _LOGGER.debug(
+                    "Tomorrow-subject search for (%s) with subject (%s) results: %s count: %s",
+                    email_addresses,
+                    subject,
+                    email_data[0],
+                    count,
+                )
 
     # Handle generic delivery sensor post-processing
     if shipper_name:

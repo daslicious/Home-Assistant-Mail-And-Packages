@@ -34,6 +34,7 @@ ATTR_SERVER = "server"
 ATTR_IMAGE_NAME = "image_name"
 ATTR_EMAIL = "email"
 ATTR_SUBJECT = "subject"
+ATTR_TOMORROW_SUBJECT = "tomorrow_subject"
 ATTR_BODY = "body"
 ATTR_BODY_COUNT = "body_count"
 ATTR_PATTERN = "pattern"
@@ -277,8 +278,14 @@ SENSOR_DATA = {
     },
     "usps_delivering": {
         "email": ["auto-reply@usps.com"],
-        "subject": ["Expected Delivery on", "Out for Delivery"],
-        "body": ["Your item is out for delivery"],
+        "subject": ["Expected Delivery on", "Expected Delivery by", "Out for Delivery"],
+        "body": [
+            "Your item is out for delivery",
+            "Expected Delivery",
+            "expected to be delivered",
+            "in transit to the next facility",
+            "is arriving",
+        ],
     },
     "usps_exception": {
         "email": ["auto-reply@usps.com"],
@@ -323,8 +330,12 @@ SENSOR_DATA = {
             "UPS Update: Follow Your Delivery on a Live Map",
             "UPS Pre-Arrival: Your Driver is Arriving Soon! Follow on a Live Map",
             "UPS Update: Parcel Scheduled for Delivery Today",
-            "Mise à jour UPS : Livraison du colis prévue demain",
             "Mise à jour UPS : Livraison du colis prévue aujourd'hui",
+        ],
+        "tomorrow_subject": [
+            "UPS Update: Package Scheduled for Delivery Tomorrow",
+            "UPS Update: Parcel Scheduled for Delivery Tomorrow",
+            "Mise à jour UPS : Livraison du colis prévue demain",
         ],
     },
     "ups_exception": {
